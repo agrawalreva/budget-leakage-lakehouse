@@ -34,13 +34,18 @@ def detect_duplicate_invoices(spark, gold_path):
     expense_vendor = fact_expense.join(dim_vendor, "vendor_id", "left")
     
     # Window function to find duplicates within 30 days
+    # Also check for similar amounts (±10% tolerance)
     window_spec = Window.partitionBy("vendor_id").orderBy("trx_date").rangeBetween(-30, 30)
     
     duplicate_flags = (expense_vendor
         .withColumn("similar_amounts", 
                    count("*").over(window_spec))
+        .withColumn("amount_tolerance", 
+                   col("amount") * 0.1)  # 10% tolerance
         .withColumn("duplicate_score", 
-                   when(col("similar_amounts") > 1, 75.0).otherwise(0.0))
+                   when(col("similar_amounts") > 1, 75.0)
+                   .when(col("similar_amounts") > 2, 90.0)  # Higher score for multiple duplicates
+                   .otherwise(0.0))
         .filter(col("duplicate_score") > 0)
         .select(
             lit("duplicate_invoice").alias("rule_name"),
