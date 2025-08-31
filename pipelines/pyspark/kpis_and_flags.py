@@ -228,24 +228,38 @@ def detect_campaign_spend_spikes(spark, gold_path):
     
     return spend_spike_flags
 
-def calculate_budget_variance(spark, gold_path):
+def load_budget_data(spark, silver_path):
+    """Load budget data from silver layer"""
+    logger.info("Loading budget data...")
+    
+    try:
+        budget_data = spark.read.parquet(f"{silver_path}/budgets")
+        logger.info(f"Loaded {budget_data.count()} budget records")
+        return budget_data
+    except Exception as e:
+        logger.warning(f"Could not load budget data from silver: {e}")
+        logger.info("Creating synthetic budget data...")
+        
+        # Fallback to synthetic data
+        return spark.createDataFrame([
+            (1, "Engineering", "2024-01", 150000.0),
+            (2, "Marketing", "2024-01", 120000.0),
+            (3, "Sales", "2024-01", 100000.0),
+            (4, "Finance", "2024-01", 80000.0),
+            (5, "HR", "2024-01", 60000.0),
+            (6, "Operations", "2024-01", 90000.0),
+            (7, "Legal", "2024-01", 70000.0)
+        ], ["dept_id", "dept_name", "budget_month", "budget_amount"])
+
+def calculate_budget_variance(spark, gold_path, silver_path):
     """Calculate budget vs actual variance by department and month"""
     logger.info("Calculating budget variance...")
     
     fact_expense = spark.read.parquet(f"{gold_path}/fact_expense")
     dim_department = spark.read.parquet(f"{gold_path}/dim_department")
     
-    # Read budgets (assuming we have budget data)
-    # For now, we'll create synthetic budget data
-    budget_data = spark.createDataFrame([
-        (1, "Engineering", "2024-01", 150000.0),
-        (2, "Marketing", "2024-01", 120000.0),
-        (3, "Sales", "2024-01", 100000.0),
-        (4, "Finance", "2024-01", 80000.0),
-        (5, "HR", "2024-01", 60000.0),
-        (6, "Operations", "2024-01", 90000.0),
-        (7, "Legal", "2024-01", 70000.0)
-    ], ["dept_id", "dept_name", "budget_month", "budget_amount"])
+    # Load budget data
+    budget_data = load_budget_data(spark, silver_path)
     
     # Calculate actual expenses by dept and month
     actual_expenses = (fact_expense
@@ -344,7 +358,9 @@ def main():
     
     # Configure paths
     gold_path = "s3://your-bucket/gold"  # In production
+    silver_path = "s3://your-bucket/silver"  # In production
     gold_path = "data/gold"  # For local testing
+    silver_path = "data/silver"  # For local testing
     
     try:
         # Detect various leakage patterns
@@ -359,7 +375,7 @@ def main():
         leakage_signals = persist_leakage_signals(spark, gold_path, all_flags)
         
         # Calculate KPIs
-        budget_variance = calculate_budget_variance(spark, gold_path)
+        budget_variance = calculate_budget_variance(spark, gold_path, silver_path)
         vendor_concentration = calculate_vendor_concentration(spark, gold_path)
         
         # Write KPI summaries
