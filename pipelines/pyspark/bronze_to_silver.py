@@ -8,18 +8,24 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 import logging
-from datetime import datetime
+import sys
+from pathlib import Path
 
-# Configure logging
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from config.config_loader import load_config
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_spark_session():
-    """Create and configure Spark session"""
+def create_spark_session(config):
+    spark_config = config['spark']
     return (SparkSession.builder
-            .appName("BudgetLeakage-BronzeToSilver")
-            .config("spark.sql.adaptive.enabled", "true")
-            .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+            .appName(f"{spark_config['app_name']}-BronzeToSilver")
+            .config("spark.sql.adaptive.enabled", str(spark_config['adaptive_enabled']).lower())
+            .config("spark.sql.adaptive.coalescePartitions.enabled", str(spark_config['adaptive_coalesce_enabled']).lower())
+            .config("spark.executor.memory", spark_config['executor_memory'])
+            .config("spark.driver.memory", spark_config['driver_memory'])
+            .config("spark.driver.maxResultSize", spark_config['max_result_size'])
             .getOrCreate())
 
 def get_expenses_schema():
@@ -77,13 +83,11 @@ def get_holidays_schema():
         StructField("is_holiday", BooleanType(), True)
     ])
 
-def transform_expenses(spark, bronze_path, silver_path):
-    """Transform expenses data from bronze to silver"""
+def transform_expenses(spark, bronze_path, silver_path, expenses_file):
     logger.info("Processing expenses data...")
     
-    # Read CSV from bronze
     df = spark.read.csv(
-        f"{bronze_path}/expenses_small.csv",
+        f"{bronze_path}/{expenses_file}",
         header=True,
         schema=get_expenses_schema()
     )
@@ -99,7 +103,7 @@ def transform_expenses(spark, bronze_path, silver_path):
         .withColumn("employee_id", col("employee_id").cast(IntegerType()))
         .withColumn("dept_id", col("dept_id").cast(IntegerType()))
         .withColumn("ingestion_timestamp", current_timestamp())
-        .withColumn("source_file", lit("expenses_small.csv"))
+        .withColumn("source_file", lit(expenses_file))
     )
     
     # Remove duplicates based on invoice_id
@@ -111,13 +115,11 @@ def transform_expenses(spark, bronze_path, silver_path):
     logger.info(f"Processed {df_deduped.count()} expense records")
     return df_deduped
 
-def transform_budgets(spark, bronze_path, silver_path):
-    """Transform budgets data from bronze to silver"""
+def transform_budgets(spark, bronze_path, silver_path, budgets_file):
     logger.info("Processing budgets data...")
     
-    # Read CSV from bronze
     df = spark.read.csv(
-        f"{bronze_path}/budgets_small.csv",
+        f"{bronze_path}/{budgets_file}",
         header=True,
         schema=get_budgets_schema()
     )
@@ -130,7 +132,7 @@ def transform_budgets(spark, bronze_path, silver_path):
         .withColumn("dept_id", col("dept_id").cast(IntegerType()))
         .withColumn("budget_month", col("budget_month"))
         .withColumn("ingestion_timestamp", current_timestamp())
-        .withColumn("source_file", lit("budgets_small.csv"))
+        .withColumn("source_file", lit(budgets_file))
     )
     
     # Remove duplicates based on dept_id and budget_month
@@ -142,13 +144,11 @@ def transform_budgets(spark, bronze_path, silver_path):
     logger.info(f"Processed {df_deduped.count()} budget records")
     return df_deduped
 
-def transform_campaign_spend(spark, bronze_path, silver_path):
-    """Transform campaign spend data from bronze to silver"""
+def transform_campaign_spend(spark, bronze_path, silver_path, campaign_file):
     logger.info("Processing campaign spend data...")
     
-    # Read CSV from bronze
     df = spark.read.csv(
-        f"{bronze_path}/campaign_spend_small.csv",
+        f"{bronze_path}/{campaign_file}",
         header=True,
         schema=get_campaign_spend_schema()
     )
@@ -166,7 +166,7 @@ def transform_campaign_spend(spark, bronze_path, silver_path):
         .withColumn("conversions", col("conversions").cast(IntegerType()))
         .withColumn("attributed_revenue", col("attributed_revenue").cast(DecimalType(10, 2)))
         .withColumn("ingestion_timestamp", current_timestamp())
-        .withColumn("source_file", lit("campaign_spend_small.csv"))
+        .withColumn("source_file", lit(campaign_file))
     )
     
     # Remove duplicates based on spend_id
@@ -178,13 +178,11 @@ def transform_campaign_spend(spark, bronze_path, silver_path):
     logger.info(f"Processed {df_deduped.count()} campaign spend records")
     return df_deduped
 
-def transform_holidays(spark, bronze_path, silver_path):
-    """Transform holidays data from bronze to silver"""
+def transform_holidays(spark, bronze_path, silver_path, holidays_file):
     logger.info("Processing holidays data...")
     
-    # Read CSV from bronze
     df = spark.read.csv(
-        f"{bronze_path}/holidays.csv",
+        f"{bronze_path}/{holidays_file}",
         header=True,
         schema=get_holidays_schema()
     )
@@ -198,7 +196,7 @@ def transform_holidays(spark, bronze_path, silver_path):
         .withColumn("is_weekend", col("is_weekend").cast(BooleanType()))
         .withColumn("is_holiday", col("is_holiday").cast(BooleanType()))
         .withColumn("ingestion_timestamp", current_timestamp())
-        .withColumn("source_file", lit("holidays.csv"))
+        .withColumn("source_file", lit(holidays_file))
     )
     
     # Remove duplicates based on date
@@ -211,26 +209,20 @@ def transform_holidays(spark, bronze_path, silver_path):
     return df_deduped
 
 def main():
-    """Main transformation pipeline"""
     logger.info("Starting Bronze to Silver transformation...")
     
-    # Initialize Spark session
-    spark = create_spark_session()
+    config = load_config()
+    spark = create_spark_session(config)
     
-    # Configure paths (replace with actual S3 paths in production)
-    bronze_path = "s3://your-bucket/bronze"  # In production
-    silver_path = "s3://your-bucket/silver"  # In production
-    
-    # For local testing, use local paths
-    bronze_path = "data/samples"
-    silver_path = "data/silver"
+    bronze_path = config['paths']['bronze']
+    silver_path = config['paths']['silver']
+    data_sources = config['data_sources']
     
     try:
-        # Transform each dataset
-        expenses_df = transform_expenses(spark, bronze_path, silver_path)
-        budgets_df = transform_budgets(spark, bronze_path, silver_path)
-        campaign_df = transform_campaign_spend(spark, bronze_path, silver_path)
-        holidays_df = transform_holidays(spark, bronze_path, silver_path)
+        expenses_df = transform_expenses(spark, bronze_path, silver_path, data_sources['expenses_file'])
+        budgets_df = transform_budgets(spark, bronze_path, silver_path, data_sources['budgets_file'])
+        campaign_df = transform_campaign_spend(spark, bronze_path, silver_path, data_sources['campaign_spend_file'])
+        holidays_df = transform_holidays(spark, bronze_path, silver_path, data_sources['holidays_file'])
         
         logger.info("Bronze to Silver transformation completed successfully!")
         

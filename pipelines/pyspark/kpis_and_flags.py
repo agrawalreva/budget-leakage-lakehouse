@@ -9,39 +9,45 @@ from pyspark.sql.functions import *
 from pyspark.sql.types import *
 from pyspark.sql.window import Window
 import logging
-from datetime import datetime, timedelta
+import sys
+from pathlib import Path
 
-# Configure logging
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from config.config_loader import load_config
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_spark_session():
-    """Create and configure Spark session"""
+def create_spark_session(config):
+    spark_config = config['spark']
     return (SparkSession.builder
-            .appName("BudgetLeakage-KPIsAndFlags")
-            .config("spark.sql.adaptive.enabled", "true")
-            .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+            .appName(f"{spark_config['app_name']}-KPIsAndFlags")
+            .config("spark.sql.adaptive.enabled", str(spark_config['adaptive_enabled']).lower())
+            .config("spark.sql.adaptive.coalescePartitions.enabled", str(spark_config['adaptive_coalesce_enabled']).lower())
+            .config("spark.executor.memory", spark_config['executor_memory'])
+            .config("spark.driver.memory", spark_config['driver_memory'])
+            .config("spark.driver.maxResultSize", spark_config['max_result_size'])
             .getOrCreate())
 
-def detect_duplicate_invoices(spark, gold_path):
-    """Detect duplicate invoices within vendor in last 30 days"""
+def detect_duplicate_invoices(spark, gold_path, config):
     logger.info("Detecting duplicate invoices...")
     
     fact_expense = spark.read.parquet(f"{gold_path}/fact_expense")
     dim_vendor = spark.read.parquet(f"{gold_path}/dim_vendor")
     
-    # Join with vendor info
     expense_vendor = fact_expense.join(dim_vendor, "vendor_id", "left")
     
-    # Window function to find duplicates within 30 days
-    # Also check for similar amounts (±10% tolerance)
-    window_spec = Window.partitionBy("vendor_id").orderBy("trx_date").rangeBetween(-30, 30)
+    leak_config = config['leakage_detection']
+    window_days = leak_config['duplicate_window_days']
+    tolerance_pct = leak_config['duplicate_amount_tolerance_pct']
+    
+    window_spec = Window.partitionBy("vendor_id").orderBy("trx_date").rangeBetween(-window_days, window_days)
     
     duplicate_flags = (expense_vendor
         .withColumn("similar_amounts", 
                    count("*").over(window_spec))
         .withColumn("amount_tolerance", 
-                   col("amount") * 0.1)  # 10% tolerance
+                   col("amount") * (tolerance_pct / 100.0))
         .withColumn("duplicate_score", 
                    when(col("similar_amounts") > 1, 75.0)
                    .when(col("similar_amounts") > 2, 90.0)  # Higher score for multiple duplicates
@@ -62,25 +68,27 @@ def detect_duplicate_invoices(spark, gold_path):
     
     return duplicate_flags
 
-def detect_sub_threshold_repeats(spark, gold_path):
-    """Detect ≥3 claims < $100 by same employee in 7 days"""
+def detect_sub_threshold_repeats(spark, gold_path, config):
     logger.info("Detecting sub-threshold repeats...")
     
     fact_expense = spark.read.parquet(f"{gold_path}/fact_expense")
     dim_employee = spark.read.parquet(f"{gold_path}/dim_employee")
     
-    # Join with employee info
     expense_employee = fact_expense.join(dim_employee, "employee_id", "left")
     
-    # Filter for small amounts and create window
-    small_expenses = expense_employee.filter(col("amount") < 100)
-    window_spec = Window.partitionBy("employee_id").orderBy("trx_date").rangeBetween(-7, 7)
+    leak_config = config['leakage_detection']
+    threshold = leak_config['sub_threshold_amount']
+    window_days = leak_config['sub_threshold_window_days']
+    min_count = leak_config['sub_threshold_min_count']
+    
+    small_expenses = expense_employee.filter(col("amount") < threshold)
+    window_spec = Window.partitionBy("employee_id").orderBy("trx_date").rangeBetween(-window_days, window_days)
     
     repeat_flags = (small_expenses
         .withColumn("small_claims_count", 
                    count("*").over(window_spec))
         .withColumn("repeat_score", 
-                   when(col("small_claims_count") >= 3, 85.0).otherwise(0.0))
+                   when(col("small_claims_count") >= min_count, 85.0).otherwise(0.0))
         .filter(col("repeat_score") > 0)
         .select(
             lit("sub_threshold_repeats").alias("rule_name"),
@@ -137,17 +145,16 @@ def detect_weekend_holiday_claims(spark, gold_path):
     
     return weekend_holiday_flags
 
-def detect_round_number_spikes(spark, gold_path):
-    """Detect proportion of amounts ending in '00' by dept/month"""
+def detect_round_number_spikes(spark, gold_path, config):
     logger.info("Detecting round number spikes...")
     
     fact_expense = spark.read.parquet(f"{gold_path}/fact_expense")
     dim_department = spark.read.parquet(f"{gold_path}/dim_department")
     
-    # Join with department info
     expense_dept = fact_expense.join(dim_department, "dept_id", "left")
     
-    # Calculate round number proportion
+    threshold = config['leakage_detection']['round_number_threshold_pct']
+    
     round_number_flags = (expense_dept
         .withColumn("amount_ends_00", 
                    when(col("amount") % 100 == 0, 1).otherwise(0))
@@ -158,8 +165,8 @@ def detect_round_number_spikes(spark, gold_path):
             (sum("amount_ends_00") / count("*") * 100).alias("round_percentage")
         )
         .withColumn("round_score", 
-                   when(col("round_percentage") > 30, 65.0)
-                   .when(col("round_percentage") > 20, 45.0)
+                   when(col("round_percentage") > threshold * 1.5, 65.0)
+                   .when(col("round_percentage") > threshold, 45.0)
                    .otherwise(0.0))
         .filter(col("round_score") > 0)
         .select(
@@ -180,18 +187,19 @@ def detect_round_number_spikes(spark, gold_path):
     
     return round_number_flags
 
-def detect_campaign_spend_spikes(spark, gold_path):
-    """Detect campaign spend spikes without conversion lift"""
+def detect_campaign_spend_spikes(spark, gold_path, config):
     logger.info("Detecting campaign spend spikes...")
     
     fact_campaign = spark.read.parquet(f"{gold_path}/fact_campaign_spend")
     dim_campaign = spark.read.parquet(f"{gold_path}/dim_campaign")
     
-    # Join with campaign info
     campaign_info = fact_campaign.join(dim_campaign, "campaign_id", "left")
     
-    # Window function to compare day-over-day
     window_spec = Window.partitionBy("campaign_id").orderBy("date")
+    
+    leak_config = config['leakage_detection']
+    cost_threshold = leak_config['campaign_spike_cost_increase_pct']
+    conv_threshold = leak_config['campaign_spike_conversion_threshold_pct']
     
     spend_spike_flags = (campaign_info
         .withColumn("prev_cost", lag("cost", 1).over(window_spec))
@@ -205,8 +213,8 @@ def detect_campaign_spend_spikes(spark, gold_path):
                         (col("conversions") - col("prev_conversions")) / col("prev_conversions") * 100)
                    .otherwise(0))
         .withColumn("spike_score", 
-                   when((col("cost_increase_pct") >= 30) & (col("conversion_change_pct") <= 10), 80.0)
-                   .when((col("cost_increase_pct") >= 20) & (col("conversion_change_pct") <= 5), 60.0)
+                   when((col("cost_increase_pct") >= cost_threshold * 1.5) & (col("conversion_change_pct") <= conv_threshold * 2), 80.0)
+                   .when((col("cost_increase_pct") >= cost_threshold) & (col("conversion_change_pct") <= conv_threshold), 60.0)
                    .otherwise(0.0))
         .filter(col("spike_score") > 0)
         .select(
@@ -292,17 +300,14 @@ def calculate_budget_variance(spark, gold_path, silver_path):
     
     return budget_variance
 
-def calculate_vendor_concentration(spark, gold_path):
-    """Calculate vendor concentration and risk scores"""
+def calculate_vendor_concentration(spark, gold_path, config):
     logger.info("Calculating vendor concentration...")
     
     fact_expense = spark.read.parquet(f"{gold_path}/fact_expense")
     dim_vendor = spark.read.parquet(f"{gold_path}/dim_vendor")
     
-    # Join with vendor info
     expense_vendor = fact_expense.join(dim_vendor, "vendor_id", "left")
     
-    # Calculate vendor spend totals
     vendor_totals = (expense_vendor
         .groupBy("vendor_id", "vendor_name")
         .agg(
@@ -312,16 +317,16 @@ def calculate_vendor_concentration(spark, gold_path):
         )
     )
     
-    # Calculate total spend for percentage
     total_spend = vendor_totals.agg(sum("total_spend").alias("grand_total")).collect()[0]["grand_total"]
     
-    # Calculate concentration metrics
+    conc_config = config['vendor_concentration']
+    
     vendor_concentration = (vendor_totals
         .withColumn("spend_percentage", col("total_spend") / lit(total_spend) * 100)
         .withColumn("concentration_score", 
-                   when(col("spend_percentage") > 10, 90.0)
-                   .when(col("spend_percentage") > 5, 70.0)
-                   .when(col("spend_percentage") > 2, 50.0)
+                   when(col("spend_percentage") > conc_config['high_risk_threshold_pct'], 90.0)
+                   .when(col("spend_percentage") > conc_config['medium_risk_threshold_pct'], 70.0)
+                   .when(col("spend_percentage") > conc_config['low_risk_threshold_pct'], 50.0)
                    .otherwise(20.0))
         .orderBy(col("total_spend").desc())
     )
@@ -350,33 +355,26 @@ def persist_leakage_signals(spark, gold_path, leakage_flags):
     return final_signals
 
 def main():
-    """Main KPIs and leakage detection pipeline"""
     logger.info("Starting KPIs and Leakage Detection pipeline...")
     
-    # Initialize Spark session
-    spark = create_spark_session()
+    config = load_config()
+    spark = create_spark_session(config)
     
-    # Configure paths
-    gold_path = "s3://your-bucket/gold"  # In production
-    silver_path = "s3://your-bucket/silver"  # In production
-    gold_path = "data/gold"  # For local testing
-    silver_path = "data/silver"  # For local testing
+    gold_path = config['paths']['gold']
+    silver_path = config['paths']['silver']
     
     try:
-        # Detect various leakage patterns
-        duplicate_flags = detect_duplicate_invoices(spark, gold_path)
-        repeat_flags = detect_sub_threshold_repeats(spark, gold_path)
+        duplicate_flags = detect_duplicate_invoices(spark, gold_path, config)
+        repeat_flags = detect_sub_threshold_repeats(spark, gold_path, config)
         weekend_flags = detect_weekend_holiday_claims(spark, gold_path)
-        round_flags = detect_round_number_spikes(spark, gold_path)
-        campaign_flags = detect_campaign_spend_spikes(spark, gold_path)
+        round_flags = detect_round_number_spikes(spark, gold_path, config)
+        campaign_flags = detect_campaign_spend_spikes(spark, gold_path, config)
         
-        # Persist leakage signals
         all_flags = [duplicate_flags, repeat_flags, weekend_flags, round_flags, campaign_flags]
         leakage_signals = persist_leakage_signals(spark, gold_path, all_flags)
         
-        # Calculate KPIs
         budget_variance = calculate_budget_variance(spark, gold_path, silver_path)
-        vendor_concentration = calculate_vendor_concentration(spark, gold_path)
+        vendor_concentration = calculate_vendor_concentration(spark, gold_path, config)
         
         # Write KPI summaries
         budget_variance.write.mode("overwrite").parquet(f"{gold_path}/kpi_budget_variance")

@@ -1,0 +1,43 @@
+paths:
+  bronze: "data/samples"
+  silver: "data/silver"
+  gold: "data/gold"
+  s3_bronze: "s3://your-bucket/bronze"
+  s3_silver: "s3://your-bucket/silver"
+  s3_gold: "s3://your-bucket/gold"
+
+spark:
+  app_name: "BudgetLeakage"
+  executor_memory: "2g"
+  driver_memory: "1g"
+  max_result_size: "2g"
+  adaptive_enabled: true
+  adaptive_coalesce_enabled: true
+
+data_sources:
+  expenses_file: "expenses_small.csv"
+  budgets_file: "budgets_small.csv"
+  campaign_spend_file: "campaign_spend_small.csv"
+  holidays_file: "holidays.csv"
+
+leakage_detection:
+  duplicate_window_days: 30
+  duplicate_amount_tolerance_pct: 10
+  sub_threshold_amount: 100
+  sub_threshold_window_days: 7
+  sub_threshold_min_count: 3
+  round_number_threshold_pct: 20
+  campaign_spike_cost_increase_pct: 20
+  campaign_spike_conversion_threshold_pct: 5
+
+vendor_concentration:
+  high_risk_threshold_pct: 10
+  medium_risk_threshold_pct: 5
+  low_risk_threshold_pct: 2
+
+budget_variance:
+  over_budget_threshold_pct: 10
+  under_budget_threshold_pct: -10
+
+environment: "local"
+

@@ -8,18 +8,24 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 import logging
-from datetime import datetime
+import sys
+from pathlib import Path
 
-# Configure logging
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from config.config_loader import load_config
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_spark_session():
-    """Create and configure Spark session"""
+def create_spark_session(config):
+    spark_config = config['spark']
     return (SparkSession.builder
-            .appName("BudgetLeakage-SilverToGold")
-            .config("spark.sql.adaptive.enabled", "true")
-            .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+            .appName(f"{spark_config['app_name']}-SilverToGold")
+            .config("spark.sql.adaptive.enabled", str(spark_config['adaptive_enabled']).lower())
+            .config("spark.sql.adaptive.coalescePartitions.enabled", str(spark_config['adaptive_coalesce_enabled']).lower())
+            .config("spark.executor.memory", spark_config['executor_memory'])
+            .config("spark.driver.memory", spark_config['driver_memory'])
+            .config("spark.driver.maxResultSize", spark_config['max_result_size'])
             .getOrCreate())
 
 def build_dimensions(spark, silver_path):
@@ -227,19 +233,13 @@ def create_summary_views(spark, gold_path):
     logger.info("Summary views created successfully!")
 
 def main():
-    """Main silver to gold transformation pipeline"""
     logger.info("Starting Silver to Gold transformation...")
     
-    # Initialize Spark session
-    spark = create_spark_session()
+    config = load_config()
+    spark = create_spark_session(config)
     
-    # Configure paths (replace with actual S3 paths in production)
-    silver_path = "s3://your-bucket/silver"  # In production
-    gold_path = "s3://your-bucket/gold"      # In production
-    
-    # For local testing, use local paths
-    silver_path = "data/silver"
-    gold_path = "data/gold"
+    silver_path = config['paths']['silver']
+    gold_path = config['paths']['gold']
     
     try:
         # Build dimensions
