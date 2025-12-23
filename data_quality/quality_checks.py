@@ -166,6 +166,6 @@ class DataQualityChecker:
         logger.info(f"Data Quality Summary: {summary['passed']}/{summary['total_checks']} checks passed ({summary['pass_rate']:.2f}%)")
         
         for result in self.results:
-            status = "✓" if result['passed'] else "✗"
-            logger.info(f"  {status} {result['message']}")
+            status = "PASS" if result['passed'] else "FAIL"
+            logger.info(f"  [{status}] {result['message']}")
 
