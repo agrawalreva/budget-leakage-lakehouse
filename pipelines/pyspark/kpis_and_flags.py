@@ -22,11 +22,14 @@ def create_spark_session(config):
     spark_config = config['spark']
     return (SparkSession.builder
             .appName(f"{spark_config['app_name']}-KPIsAndFlags")
+            .master("local[*]")
             .config("spark.sql.adaptive.enabled", str(spark_config['adaptive_enabled']).lower())
             .config("spark.sql.adaptive.coalescePartitions.enabled", str(spark_config['adaptive_coalesce_enabled']).lower())
             .config("spark.executor.memory", spark_config['executor_memory'])
             .config("spark.driver.memory", spark_config['driver_memory'])
             .config("spark.driver.maxResultSize", spark_config['max_result_size'])
+            .config("spark.driver.extraJavaOptions", "-Dio.netty.tryReflectionSetAccessible=true")
+            .config("spark.sql.warehouse.dir", "file:///tmp/spark-warehouse")
             .getOrCreate())
 
 def detect_duplicate_invoices(spark, gold_path, config):
@@ -41,7 +44,8 @@ def detect_duplicate_invoices(spark, gold_path, config):
     window_days = leak_config['duplicate_window_days']
     tolerance_pct = leak_config['duplicate_amount_tolerance_pct']
     
-    window_spec = Window.partitionBy("vendor_id").orderBy("trx_date").rangeBetween(-window_days, window_days)
+    expense_vendor = expense_vendor.withColumn("trx_date_days", datediff(col("trx_date"), lit("2024-01-01")))
+    window_spec = Window.partitionBy("vendor_id").orderBy("trx_date_days").rangeBetween(-window_days, window_days)
     
     duplicate_flags = (expense_vendor
         .withColumn("similar_amounts", 
@@ -82,7 +86,8 @@ def detect_sub_threshold_repeats(spark, gold_path, config):
     min_count = leak_config['sub_threshold_min_count']
     
     small_expenses = expense_employee.filter(col("amount") < threshold)
-    window_spec = Window.partitionBy("employee_id").orderBy("trx_date").rangeBetween(-window_days, window_days)
+    small_expenses = small_expenses.withColumn("trx_date_days", datediff(col("trx_date"), lit("2024-01-01")))
+    window_spec = Window.partitionBy("employee_id").orderBy("trx_date_days").rangeBetween(-window_days, window_days)
     
     repeat_flags = (small_expenses
         .withColumn("small_claims_count", 
@@ -271,26 +276,26 @@ def calculate_budget_variance(spark, gold_path, silver_path):
     
     # Calculate actual expenses by dept and month
     actual_expenses = (fact_expense
-        .join(dim_department, "dept_id", "left")
-        .groupBy("dept_id", "dept_name", "budget_month_key")
-        .agg(sum("amount").alias("actual_amount"))
+        .join(dim_department, fact_expense.dept_id == dim_department.dept_id, "left")
+        .groupBy(fact_expense["dept_id"], dim_department["dept_name"], fact_expense["budget_month_key"])
+        .agg(sum(fact_expense["amount"]).alias("actual_amount"))
     )
     
     # Join with budget and calculate variance
     budget_variance = (actual_expenses
         .join(budget_data, 
-              (actual_expenses.dept_id == budget_data.dept_id) & 
-              (actual_expenses.budget_month_key == budget_data.budget_month), "left")
-        .withColumn("budget_amount", coalesce(col("budget_amount"), lit(0)))
+              (actual_expenses["dept_id"] == budget_data.dept_id) & 
+              (actual_expenses["budget_month_key"] == budget_data.budget_month), "left")
+        .withColumn("budget_amount", coalesce(budget_data["budget_amount"], lit(0)))
         .withColumn("variance_amount", col("actual_amount") - col("budget_amount"))
         .withColumn("variance_percentage", 
                    when(col("budget_amount") > 0, 
                         col("variance_amount") / col("budget_amount") * 100)
                    .otherwise(0))
         .select(
-            col("dept_id"),
-            col("dept_name"),
-            col("budget_month_key"),
+            actual_expenses["dept_id"],
+            actual_expenses["dept_name"],
+            actual_expenses["budget_month_key"],
             col("budget_amount"),
             col("actual_amount"),
             col("variance_amount"),

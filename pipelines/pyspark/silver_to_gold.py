@@ -21,11 +21,14 @@ def create_spark_session(config):
     spark_config = config['spark']
     return (SparkSession.builder
             .appName(f"{spark_config['app_name']}-SilverToGold")
+            .master("local[*]")
             .config("spark.sql.adaptive.enabled", str(spark_config['adaptive_enabled']).lower())
             .config("spark.sql.adaptive.coalescePartitions.enabled", str(spark_config['adaptive_coalesce_enabled']).lower())
             .config("spark.executor.memory", spark_config['executor_memory'])
             .config("spark.driver.memory", spark_config['driver_memory'])
             .config("spark.driver.maxResultSize", spark_config['max_result_size'])
+            .config("spark.driver.extraJavaOptions", "-Dio.netty.tryReflectionSetAccessible=true")
+            .config("spark.sql.warehouse.dir", "file:///tmp/spark-warehouse")
             .getOrCreate())
 
 def build_dimensions(spark, silver_path):
@@ -116,25 +119,25 @@ def build_facts(spark, silver_path, dim_vendor, dim_employee, dim_department, di
     
     # Build fact_expense
     fact_expense = (expenses_df
-        .join(dim_vendor, "vendor_id", "left")
-        .join(dim_employee, "employee_id", "left")
-        .join(dim_department, "dept_id", "left")
+        .join(dim_vendor, expenses_df.vendor_id == dim_vendor.vendor_id, "left")
+        .join(dim_employee, expenses_df.employee_id == dim_employee.employee_id, "left")
+        .join(dim_department, expenses_df.dept_id == dim_department.dept_id, "left")
         .join(dim_calendar, expenses_df.trx_date == dim_calendar.date, "left")
         .select(
             monotonically_increasing_id().alias("expense_id"),
-            col("invoice_id"),
-            col("vendor_id"),
-            col("employee_id"),
-            col("dept_id"),
-            col("trx_date"),
-            col("amount"),
-            col("currency"),
-            col("payment_method"),
-            col("month_key").alias("budget_month_key"),
-            col("vendor_key"),
-            col("employee_key"),
-            col("dept_key"),
-            col("calendar_key"),
+            expenses_df["invoice_id"],
+            expenses_df["vendor_id"],
+            expenses_df["employee_id"],
+            expenses_df["dept_id"],
+            expenses_df["trx_date"],
+            expenses_df["amount"],
+            expenses_df["currency"],
+            expenses_df["payment_method"],
+            dim_calendar["month_key"].alias("budget_month_key"),
+            dim_vendor["vendor_key"],
+            dim_employee["employee_key"],
+            dim_department["dept_key"],
+            dim_calendar["calendar_key"],
             current_timestamp().alias("created_timestamp")
         )
     )
@@ -143,16 +146,16 @@ def build_facts(spark, silver_path, dim_vendor, dim_employee, dim_department, di
     fact_campaign_spend = (campaign_df
         .join(dim_calendar, campaign_df.date == dim_calendar.date, "left")
         .select(
-            col("spend_id"),
-            col("campaign_id"),
-            col("channel"),
-            col("date"),
-            col("cost"),
-            col("clicks"),
-            col("impressions"),
-            col("conversions"),
-            col("attributed_revenue"),
-            col("calendar_key"),
+            campaign_df["spend_id"],
+            campaign_df["campaign_id"],
+            campaign_df["channel"],
+            campaign_df["date"],
+            campaign_df["cost"],
+            campaign_df["clicks"],
+            campaign_df["impressions"],
+            campaign_df["conversions"],
+            campaign_df["attributed_revenue"],
+            dim_calendar["calendar_key"],
             current_timestamp().alias("created_timestamp")
         )
     )
@@ -202,8 +205,8 @@ def create_summary_views(spark, gold_path):
     
     # Department expense summary
     dept_expenses = (fact_expense
-        .join(dim_department, "dept_id", "left")
-        .groupBy("dept_id", "dept_name")
+        .join(dim_department, fact_expense.dept_id == dim_department.dept_id, "left")
+        .groupBy(fact_expense["dept_id"], dim_department["dept_name"])
         .agg(
             sum("amount").alias("total_expenses"),
             count("*").alias("expense_count")

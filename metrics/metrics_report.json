@@ -1,0 +1,75 @@
+{
+  "metrics": {
+    "expenses": {
+      "total_transactions": 1500,
+      "total_expenses": 6689436.99,
+      "avg_transaction_amount": 4459.62466,
+      "max_transaction_amount": 9981.52,
+      "min_transaction_amount": 41.04
+    },
+    "leakage_detection": {
+      "total_signals": 2263,
+      "high_risk_signals": 192,
+      "medium_risk_signals": 2057,
+      "low_risk_signals": 14,
+      "avg_risk_score": 73.81131241714539
+    },
+    "leakage_by_rule": {
+      "weekend_holiday_claim": 557,
+      "round_number_spikes": 21,
+      "duplicate_invoice": 1488,
+      "campaign_spend_spike": 197
+    },
+    "budget_analysis": {
+      "total_budget": 11543713.5,
+      "total_actual": 6689436.99,
+      "total_variance": -4854276.51,
+      "avg_variance_pct": -36.615206375354845,
+      "over_budget_departments": 8,
+      "under_budget_departments": 70
+    },
+    "vendor_analysis": {
+      "total_vendors": 50,
+      "total_vendor_spend": 6689436.99,
+      "avg_spend_percentage": 2.000000000004,
+      "max_spend_percentage": 2.8239561907,
+      "high_risk_vendors": 0
+    },
+    "top_vendors": [
+      {
+        "vendor_name": "George Group",
+        "total_spend": 188906.77,
+        "spend_percentage": 2.8239561907,
+        "concentration_score": 50.0
+      },
+      {
+        "vendor_name": "Mcclain, Miller and Henderson",
+        "total_spend": 184446.33,
+        "spend_percentage": 2.7572773355,
+        "concentration_score": 50.0
+      },
+      {
+        "vendor_name": "Smith-Bowen",
+        "total_spend": 177910.82,
+        "spend_percentage": 2.659578381,
+        "concentration_score": 50.0
+      },
+      {
+        "vendor_name": "Watts, Robinson and Nguyen",
+        "total_spend": 169829.65,
+        "spend_percentage": 2.5387734462,
+        "concentration_score": 50.0
+      },
+      {
+        "vendor_name": "Arroyo, Miller and Tucker",
+        "total_spend": 169423.35,
+        "spend_percentage": 2.5326996914,
+        "concentration_score": 50.0
+      }
+    ]
+  },
+  "leakage_estimate": {
+    "estimated_potential_leakage": 428123.96736,
+    "leakage_percentage": 6.4
+  }
+}

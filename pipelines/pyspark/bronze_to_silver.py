@@ -21,11 +21,14 @@ def create_spark_session(config):
     spark_config = config['spark']
     return (SparkSession.builder
             .appName(f"{spark_config['app_name']}-BronzeToSilver")
+            .master("local[*]")
             .config("spark.sql.adaptive.enabled", str(spark_config['adaptive_enabled']).lower())
             .config("spark.sql.adaptive.coalescePartitions.enabled", str(spark_config['adaptive_coalesce_enabled']).lower())
             .config("spark.executor.memory", spark_config['executor_memory'])
             .config("spark.driver.memory", spark_config['driver_memory'])
             .config("spark.driver.maxResultSize", spark_config['max_result_size'])
+            .config("spark.driver.extraJavaOptions", "-Dio.netty.tryReflectionSetAccessible=true")
+            .config("spark.sql.warehouse.dir", "file:///tmp/spark-warehouse")
             .getOrCreate())
 
 def get_expenses_schema():
