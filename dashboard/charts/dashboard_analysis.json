@@ -1,0 +1,213 @@
+{
+  "summary": {
+    "total_charts": 8,
+    "generation_date": "2025-12-23T16:17:59.601935",
+    "data_sources": {
+      "expenses_count": 1500,
+      "leakage_signals_count": 2263,
+      "budget_records_count": 84,
+      "vendors_count": 50
+    }
+  },
+  "charts": [
+    {
+      "name": "Monthly Expense Trends",
+      "file": "chart_1_monthly_expenses.html",
+      "analysis": {
+        "chart_name": "Monthly Expense Trends",
+        "type": "Line Chart",
+        "description": "Shows total expenses by month across all departments",
+        "insights": [
+          "Total months analyzed: 12",
+          "Average monthly expenses: $557,453.08",
+          "Highest month: 2024-01 ($1,408,934.86)",
+          "Lowest month: 2024-07 ($395,865.65)",
+          "Month-over-month volatility: 272,653.84"
+        ]
+      }
+    },
+    {
+      "name": "Leakage Signals by Type",
+      "file": "chart_2_leakage_by_type.html",
+      "analysis": {
+        "chart_name": "Leakage Signals by Detection Rule",
+        "type": "Bar Chart",
+        "description": "Distribution of leakage signals across different detection algorithms",
+        "insights": [
+          "Total signals detected: 2263",
+          "Most common rule: duplicate_invoice (1488 signals, 65.8%)",
+          "Number of active detection rules: 4",
+          "Average signals per rule: 565.8"
+        ],
+        "rule_breakdown": [
+          {
+            "Rule Name": "duplicate_invoice",
+            "Count": 1488
+          },
+          {
+            "Rule Name": "weekend_holiday_claim",
+            "Count": 557
+          },
+          {
+            "Rule Name": "campaign_spend_spike",
+            "Count": 197
+          },
+          {
+            "Rule Name": "round_number_spikes",
+            "Count": 21
+          }
+        ]
+      }
+    },
+    {
+      "name": "Risk Score Distribution",
+      "file": "chart_3_risk_distribution.html",
+      "analysis": {
+        "chart_name": "Risk Score Distribution",
+        "type": "Histogram",
+        "description": "Distribution of risk scores across all leakage signals",
+        "insights": [
+          "Mean risk score: 73.81",
+          "Median risk score: 75.00",
+          "Standard deviation: 3.99",
+          "High risk signals (80+): 192 (8.5%)",
+          "Medium risk signals (60-79): 2057 (90.9%)",
+          "Low risk signals (<60): 14 (0.6%)"
+        ]
+      }
+    },
+    {
+      "name": "Signals Over Time",
+      "file": "chart_4_signals_over_time.html",
+      "analysis": {
+        "chart_name": "Leakage Signals Over Time",
+        "type": "Time Series Line Chart",
+        "description": "Trend of leakage signals detected over time",
+        "insights": [
+          "Date range: 2024-01-01 to 2025-12-23",
+          "Average signals per day: 6.25",
+          "Peak day: 2024-01-21 (70 signals)",
+          "Days with signals: 362",
+          "Trend: Increasing"
+        ]
+      }
+    },
+    {
+      "name": "Budget Variance by Department",
+      "file": "chart_5_budget_variance.html",
+      "analysis": {
+        "chart_name": "Budget Variance by Department",
+        "type": "Bar Chart",
+        "description": "Budget vs actual variance percentage by department",
+        "insights": [
+          "Total department-month combinations: 84",
+          "Over budget (>10%): 8 instances (9.5%)",
+          "Under budget (<-10%): 70 instances (83.3%)",
+          "On target: 6 instances (7.1%)",
+          "Average variance: -36.62%",
+          "Highest variance: Engineering (95.77%)"
+        ]
+      }
+    },
+    {
+      "name": "Monthly Budget Performance",
+      "file": "chart_6_monthly_budget_performance.html",
+      "analysis": {
+        "chart_name": "Monthly Budget vs Actual Performance",
+        "type": "Grouped Bar Chart",
+        "description": "Comparison of budgeted vs actual spending by month",
+        "insights": [
+          "Total budget: $11,543,713.50",
+          "Total actual: $6,689,436.99",
+          "Overall variance: -42.05%",
+          "Average monthly budget: $961,976.13",
+          "Average monthly actual: $557,453.08",
+          "Months analyzed: 12"
+        ]
+      }
+    },
+    {
+      "name": "Top Vendors by Spend",
+      "file": "chart_7_top_vendors.html",
+      "analysis": {
+        "chart_name": "Top 10 Vendors by Spend",
+        "type": "Bar Chart",
+        "description": "Top 10 vendors ranked by total spending",
+        "insights": [
+          "Top vendor: George Group ($188,906.77, 2.82%)",
+          "Top 10 vendors account for 25.3% of total spend",
+          "Total vendors: 50",
+          "Total spend across all vendors: $6,689,436.99",
+          "Average vendor spend: $133,788.74"
+        ],
+        "top_vendors": [
+          {
+            "vendor_name": "George Group",
+            "total_spend": 188906.77,
+            "spend_percentage": 2.8239561907
+          },
+          {
+            "vendor_name": "Mcclain, Miller and Henderson",
+            "total_spend": 184446.33,
+            "spend_percentage": 2.7572773355
+          },
+          {
+            "vendor_name": "Smith-Bowen",
+            "total_spend": 177910.82,
+            "spend_percentage": 2.659578381
+          },
+          {
+            "vendor_name": "Watts, Robinson and Nguyen",
+            "total_spend": 169829.65,
+            "spend_percentage": 2.5387734462
+          },
+          {
+            "vendor_name": "Arroyo, Miller and Tucker",
+            "total_spend": 169423.35,
+            "spend_percentage": 2.5326996914
+          },
+          {
+            "vendor_name": "Hoffman, Baker and Richards",
+            "total_spend": 164335.54,
+            "spend_percentage": 2.456642319
+          },
+          {
+            "vendor_name": "Blake and Sons",
+            "total_spend": 161179.15,
+            "spend_percentage": 2.4094576306
+          },
+          {
+            "vendor_name": "Abbott-Munoz",
+            "total_spend": 159480.55,
+            "spend_percentage": 2.3840653591
+          },
+          {
+            "vendor_name": "Guzman, Hoffman and Baldwin",
+            "total_spend": 159281.03,
+            "spend_percentage": 2.3810827464
+          },
+          {
+            "vendor_name": "Rodriguez-Graham",
+            "total_spend": 158031.88,
+            "spend_percentage": 2.3624092765
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vendor Risk Distribution",
+      "file": "chart_8_vendor_risk_distribution.html",
+      "analysis": {
+        "chart_name": "Vendor Risk Distribution",
+        "type": "Pie Chart",
+        "description": "Distribution of vendors by concentration risk level",
+        "insights": [
+          "High risk vendors: 0 (0.0%)",
+          "Medium risk vendors: 28 (56.0%)",
+          "Low risk vendors: 22 (44.0%)",
+          "Total vendors: 50"
+        ]
+      }
+    }
+  ]
+}
