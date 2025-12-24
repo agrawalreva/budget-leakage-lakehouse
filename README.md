@@ -59,6 +59,12 @@ streamlit run dashboard/app.py
 - Tests to make sure everything works
 - CI/CD pipeline that runs tests automatically
 
+**Optional: Data Warehouse Integration:**
+- SQL scripts in `warehouse/` for loading Gold layer Parquet files into Snowflake
+- `ddl_snowflake.sql` creates tables matching your star schema
+- `views_gold.sql` creates 7 BI views for Tableau/Power BI (budget variance, vendor concentration, leakage flags, campaign ROI, etc.)
+- **Why it's optional:** The project uses a lakehouse pattern where Parquet files are the source of truth. Streamlit reads Parquet directly, so you don't need Snowflake or any data warehouse. The SQL files are there if the company already uses Snowflake/BI tools and want to load the data there.
+
 ## The Numbers
 
 On the sample dataset:
