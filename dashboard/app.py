@@ -35,12 +35,36 @@ def load_gold_data(config):
         budget_variance = spark.read.parquet(f"{gold_path}/kpi_budget_variance")
         vendor_concentration = spark.read.parquet(f"{gold_path}/kpi_vendor_concentration")
         
+        expenses_df = fact_expense.toPandas()
+        campaigns_df = fact_campaign.toPandas()
+        leakage_df = leakage_signals.toPandas()
+        budget_df = budget_variance.toPandas()
+        vendor_df = vendor_concentration.toPandas()
+        
+        if not expenses_df.empty:
+            expenses_df['amount'] = pd.to_numeric(expenses_df['amount'], errors='coerce')
+        
+        if not leakage_df.empty:
+            leakage_df['score'] = pd.to_numeric(leakage_df['score'], errors='coerce')
+        
+        if not budget_df.empty:
+            budget_df['budget_amount'] = pd.to_numeric(budget_df['budget_amount'], errors='coerce')
+            budget_df['actual_amount'] = pd.to_numeric(budget_df['actual_amount'], errors='coerce')
+            budget_df['variance_amount'] = pd.to_numeric(budget_df['variance_amount'], errors='coerce')
+            budget_df['variance_percentage'] = pd.to_numeric(budget_df['variance_percentage'], errors='coerce')
+        
+        if not vendor_df.empty:
+            vendor_df['total_spend'] = pd.to_numeric(vendor_df['total_spend'], errors='coerce')
+            vendor_df['transaction_count'] = pd.to_numeric(vendor_df['transaction_count'], errors='coerce')
+            vendor_df['spend_percentage'] = pd.to_numeric(vendor_df['spend_percentage'], errors='coerce')
+            vendor_df['concentration_score'] = pd.to_numeric(vendor_df['concentration_score'], errors='coerce')
+        
         return {
-            'expenses': fact_expense.toPandas(),
-            'campaigns': fact_campaign.toPandas(),
-            'leakage': leakage_signals.toPandas(),
-            'budget_variance': budget_variance.toPandas(),
-            'vendor_concentration': vendor_concentration.toPandas()
+            'expenses': expenses_df,
+            'campaigns': campaigns_df,
+            'leakage': leakage_df,
+            'budget_variance': budget_df,
+            'vendor_concentration': vendor_df
         }
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
@@ -91,7 +115,7 @@ with tab1:
         fig = px.line(expenses_by_month, x='Month', y='Total Expenses', 
                      title='Monthly Expense Trends',
                      markers=True)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     st.subheader("Leakage Signals by Type")
     if not data['leakage'].empty:
@@ -100,7 +124,7 @@ with tab1:
         
         fig = px.bar(leakage_by_type, x='Rule Name', y='Count',
                     title='Leakage Signals by Detection Rule')
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 with tab2:
     st.header("Leakage Detection Signals")
@@ -134,12 +158,12 @@ with tab2:
             filtered_leakage = filtered_leakage[filtered_leakage['rule_name'] == rule_filter]
         
         st.dataframe(filtered_leakage[['rule_name', 'entity_type', 'entity_name', 'signal_date', 'score', 'details']], 
-                    use_container_width=True)
+                    width='stretch')
         
         st.subheader("Risk Score Distribution")
         fig = px.histogram(filtered_leakage, x='score', nbins=20,
                           title='Distribution of Risk Scores')
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         st.subheader("Signals Over Time")
         if 'signal_date' in filtered_leakage.columns:
@@ -149,7 +173,7 @@ with tab2:
             
             fig = px.line(signals_by_date, x='Date', y='Count',
                          title='Leakage Signals Over Time')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 with tab3:
     st.header("Budget vs Actual Analysis")
@@ -167,12 +191,12 @@ with tab3:
                     labels={'variance_pct': 'Variance %', 'dept_name': 'Department'})
         fig.add_hline(y=10, line_dash="dash", line_color="red", annotation_text="Over Budget Threshold")
         fig.add_hline(y=-10, line_dash="dash", line_color="green", annotation_text="Under Budget Threshold")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         st.subheader("Budget Variance Details")
         st.dataframe(budget_df[['dept_name', 'budget_month_key', 'budget_amount', 
                                 'actual_amount', 'variance_amount', 'variance_percentage']],
-                    use_container_width=True)
+                    width='stretch')
         
         st.subheader("Monthly Budget Performance")
         monthly_budget = budget_df.groupby('budget_month_key').agg({
@@ -188,7 +212,7 @@ with tab3:
                             y=monthly_budget['actual_amount'],
                             name='Actual', marker_color='orange'))
         fig.update_layout(title='Monthly Budget vs Actual', barmode='group')
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 with tab4:
     st.header("Vendor Concentration Risk")
@@ -204,7 +228,7 @@ with tab4:
         fig = px.bar(top_vendors, x='vendor_name', y='total_spend',
                     title='Top 10 Vendors by Total Spend',
                     labels={'total_spend': 'Total Spend ($)', 'vendor_name': 'Vendor'})
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         st.subheader("Vendor Concentration Risk")
         risk_counts = vendor_df['concentration_score'].apply(
@@ -213,10 +237,10 @@ with tab4:
         
         fig = px.pie(values=risk_counts.values, names=risk_counts.index,
                     title='Vendor Risk Distribution')
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         st.subheader("Vendor Concentration Details")
         st.dataframe(vendor_df[['vendor_name', 'total_spend', 'transaction_count', 
                                'spend_percentage', 'concentration_score']].sort_values('total_spend', ascending=False),
-                    use_container_width=True)
+                    width='stretch')
 
