@@ -130,7 +130,7 @@ streamlit run dashboard/app.py
 
 **Features:**
 - Interactive Plotly charts
-- Real-time filtering
+- Filtering
 - Risk score visualization
 - Time-series analysis
 
@@ -141,7 +141,6 @@ The dashboard reads from `data/gold/`, so you must run the pipeline first:
 2. silver_to_gold.py
 3. kpis_and_flags.py
 
-Then the dashboard will show real data!
 
 ## Running Tests
 
@@ -167,32 +166,6 @@ python data_quality/run_quality_checks.py
 - Checks for nulls, duplicates, invalid ranges
 - Reports pass/fail status for each check
 
-## Troubleshooting
-
-### PySpark Installation Issues
-
-If PySpark fails to install:
-```bash
-# Try with pip3
-pip3 install pyspark==3.5.0
-
-# Or use conda
-conda install -c conda-forge pyspark
-```
-
-### Java Issues
-
-If you get "JAVA_HOME is not set":
-```bash
-# macOS
-export JAVA_HOME=$(/usr/libexec/java_home)
-
-# Linux
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-
-# Add to ~/.bashrc or ~/.zshrc to make permanent
-```
-
 ### Memory Issues
 
 If Spark runs out of memory, edit `config/config.yaml`:
@@ -209,7 +182,7 @@ Make sure you've run all pipeline steps:
 2. Check that `data/gold/` directory exists with Parquet files
 3. Run `python pipelines/pyspark/kpis_and_flags.py` to generate leakage signals
 
-## Quick Start (All Steps)
+## How to Start
 
 ```bash
 # 1. Install dependencies
@@ -244,6 +217,4 @@ ls -lh data/gold/*/
 # Check metrics
 cat metrics/metrics_report.json
 ```
-
-All the pipeline code is **100% real** - it's actual PySpark code that processes real data files. The demo script (`demo_pipeline.py`) just simulates the output for demonstration purposes when PySpark isn't installed.
 

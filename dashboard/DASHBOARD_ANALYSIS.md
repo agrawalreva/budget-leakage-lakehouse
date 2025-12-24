@@ -1,16 +1,8 @@
 # Dashboard Charts Analysis Report
 
-**Generated:** December 23, 2025  
-**Data Sources:** Gold layer Parquet files (verified Apache Parquet format with Snappy compression)  
-**Total Charts:** 8 interactive visualizations
+**Data Sources:** Gold layer Parquet files
 
 ## Data Format Verification
-
-✅ **Confirmed:** All data is stored in **Apache Parquet format** with Snappy compression
-- Silver layer: `data/silver/*/*.snappy.parquet`
-- Gold layer: `data/gold/*/*.snappy.parquet`
-- Verified using `file` command and PySpark read operations
-- Format provides columnar storage, compression, and schema evolution capabilities
 
 ## Executive Summary
 
